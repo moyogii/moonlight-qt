@@ -42,6 +42,8 @@
 	<string>VERSION</string>
 	<key>CFBundleShortVersionString</key>
 	<string>VERSION</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.games</string>
 	<key>CFBundleDisplayName</key>
 	<string>Moonlight</string>
 </dict>
