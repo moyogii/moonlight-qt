@@ -1751,7 +1751,53 @@ Flickable {
                                   qsTr("You can toggle it at any time while streaming using Ctrl+Alt+Shift+S or Select+L1+R1+X.") + "\n\n" +
                                   qsTr("The performance overlay is not supported on Steam Link or Raspberry Pi.")
                 }
+
+                CheckBox {
+                    id: gameModeCheck
+                    hoverEnabled: true
+                    width: parent.width
+                    text: qsTr("Game Mode (Experimental)")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.enableGameMode
+                    visible: SystemProperties.hasPlatformHardwareAcceleration && Qt.platform.os === "osx"
+                    
+                    property bool pendingValue: false
+                    
+                    onCheckedChanged: {
+                        if (checked !== StreamingPreferences.enableGameMode) {
+                            pendingValue = checked
+                            gameModeConfirmDialog.open()
+                        }
+                    }
+
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Enables macOS Game Mode (macOS 26+). This optimizes system performance for gaming by prioritizing CPU/GPU access.\n\n") +
+                                  qsTr("Requires an app restart to take effect.\n\n") +
+                                  qsTr("Disable this option if you encounter issues or stuttering during streaming.")
+                }
             }
+        }
+    }
+    
+    NavigableMessageDialog {
+        id: gameModeConfirmDialog
+        standardButtons: Dialog.Yes | Dialog.No
+        text: qsTr("Game Mode will be ") + (gameModeCheck.pendingValue ? qsTr("enabled.") : qsTr("disabled.")) + 
+              qsTr(" Moonlight will automatically restart to apply this change.\n\nDo you want to continue?")
+        
+        onAccepted: {
+            if (StreamingPreferences.updateGameModeInPlist(gameModeCheck.pendingValue)) {
+                StreamingPreferences.enableGameMode = gameModeCheck.pendingValue
+                StreamingPreferences.restartApplication()
+            } else {
+                gameModeCheck.checked = StreamingPreferences.enableGameMode
+            }
+        }
+        
+        onRejected: {
+            gameModeCheck.checked = StreamingPreferences.enableGameMode
         }
     }
 }

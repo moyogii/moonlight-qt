@@ -7,6 +7,8 @@
 #include <QLocale>
 #include <QReadWriteLock>
 #include <QtMath>
+#include <QProcess>
+#include <QFileInfo>
 
 #include <QtDebug>
 
@@ -51,6 +53,7 @@
 #define SER_CAPTURESYSKEYS "capturesyskeys"
 #define SER_KEEPAWAKE "keepawake"
 #define SER_LANGUAGE "language"
+#define SER_ENABLEGAMEMODE "enablegamemode"
 
 #define CURRENT_DEFAULT_VER 2
 
@@ -147,6 +150,7 @@ void StreamingPreferences::reload()
     reverseScrollDirection = settings.value(SER_REVERSESCROLL, false).toBool();
     swapFaceButtons = settings.value(SER_SWAPFACEBUTTONS, false).toBool();
     keepAwake = settings.value(SER_KEEPAWAKE, true).toBool();
+    enableGameMode = settings.value(SER_ENABLEGAMEMODE, false).toBool();
     enableHdr = settings.value(SER_HDR, false).toBool();
     captureSysKeysMode = static_cast<CaptureSysKeysMode>(settings.value(SER_CAPTURESYSKEYS,
                                                          static_cast<int>(CaptureSysKeysMode::CSK_OFF)).toInt());
@@ -187,6 +191,11 @@ void StreamingPreferences::reload()
         videoCodecConfig = VCC_AUTO;
         enableHdr = true;
     }
+
+#ifdef Q_OS_MACOS
+    // Sync Game Mode preference with Info.plist on startup
+    syncGameModeWithPlist();
+#endif
 }
 
 bool StreamingPreferences::retranslate()
@@ -355,6 +364,7 @@ void StreamingPreferences::save()
     settings.setValue(SER_SWAPFACEBUTTONS, swapFaceButtons);
     settings.setValue(SER_CAPTURESYSKEYS, captureSysKeysMode);
     settings.setValue(SER_KEEPAWAKE, keepAwake);
+    settings.setValue(SER_ENABLEGAMEMODE, enableGameMode);
 }
 
 int StreamingPreferences::getDefaultBitrate(int width, int height, int fps, bool yuv444)
@@ -412,3 +422,92 @@ int StreamingPreferences::getDefaultBitrate(int width, int height, int fps, bool
 
     return qRound(resolutionFactor * frameRateFactor) * 1000;
 }
+
+/* @TODO: This is a rough hack and only supports MacOS 26+, we need to add support for older versions. */
+#ifdef Q_OS_MACOS
+void StreamingPreferences::setEnableGameMode(bool value)
+{
+    if (enableGameMode != value) {
+        enableGameMode = value;
+        emit enableGameModeChanged();
+    }
+}
+
+bool StreamingPreferences::updateGameModeInPlist(bool enable)
+{
+    QString bundlePlistPath = QCoreApplication::applicationDirPath() + "/../Info.plist";
+    QString plistPath;
+    QFileInfo bundleInfo(bundlePlistPath);
+    
+    if (bundleInfo.exists() && bundleInfo.isWritable()) {
+        plistPath = bundlePlistPath;
+    } else {
+        return false;
+    }
+    
+    QString enableValue = enable ? "YES" : "NO";
+    QProcess process;
+    
+    // Update LSSupportsGameMode key (macOS 26+)
+    QStringList arguments;
+    arguments << "-replace" << "LSSupportsGameMode" << "-string" << enableValue << plistPath;
+    
+    process.start("plutil", arguments);
+    process.waitForFinished(5000);
+    
+    if (process.exitCode() == 0) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void StreamingPreferences::restartApplication()
+{
+    save();   
+    QString appPath = QCoreApplication::applicationFilePath();
+    
+    QStringList arguments = QCoreApplication::arguments();
+    arguments.removeFirst(); // Remove the application path from arguments
+    
+    bool started = QProcess::startDetached(appPath, arguments);
+    if (started) {
+        qDebug() << "Successfully started new application instance, exiting current one";
+        QCoreApplication::exit(0);
+    } else {
+        qDebug() << "Failed to start new application instance";
+    }
+}
+
+void StreamingPreferences::syncGameModeWithPlist()
+{
+    QString bundlePlistPath = QCoreApplication::applicationDirPath() + "/../Info.plist";
+    QFileInfo bundleInfo(bundlePlistPath);
+    
+    if (!bundleInfo.exists() || !bundleInfo.isWritable()) {
+        qDebug() << "Cannot sync Game Mode: Info.plist not accessible at" << bundlePlistPath;
+        return;
+    }
+    
+    QProcess process;
+    QStringList arguments;
+    arguments << "-extract" << "LSSupportsGameMode" << "raw" << bundlePlistPath;
+    
+    process.start("plutil", arguments);
+    process.waitForFinished(5000);
+    
+    if (process.exitCode() == 0) {
+        QString currentValue = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+        QString expectedValue = enableGameMode ? "YES" : "NO";
+        
+        if (currentValue != expectedValue) {
+            updateGameModeInPlist(enableGameMode);
+        }
+    } else {
+        // LSSupportsGameMode key doesn't exist, add it if enableGameMode is true
+        if (enableGameMode) {
+            updateGameModeInPlist(enableGameMode);
+        }
+    }
+}
+#endif

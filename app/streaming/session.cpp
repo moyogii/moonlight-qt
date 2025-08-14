@@ -885,8 +885,9 @@ bool Session::initialize()
         // Fall-through
     case StreamingPreferences::WM_FULLSCREEN:
 #ifdef Q_OS_DARWIN
-        if (qEnvironmentVariableIntValue("I_WANT_BUGGY_FULLSCREEN") == 0) {
+        if (!m_Preferences->enableGameMode) {
             // Don't use "real" fullscreen on macOS by default. See comments above.
+            // However, force native fullscreen when Game Mode is enabled for optimal performance.
             m_FullScreenFlag = SDL_WINDOW_FULLSCREEN_DESKTOP;
         }
         else {

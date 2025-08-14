@@ -144,9 +144,21 @@ public:
     Q_PROPERTY(bool swapFaceButtons MEMBER swapFaceButtons NOTIFY swapFaceButtonsChanged)
     Q_PROPERTY(bool keepAwake MEMBER keepAwake NOTIFY keepAwakeChanged)
     Q_PROPERTY(CaptureSysKeysMode captureSysKeysMode MEMBER captureSysKeysMode NOTIFY captureSysKeysModeChanged)
-    Q_PROPERTY(Language language MEMBER language NOTIFY languageChanged);
+    Q_PROPERTY(Language language MEMBER language NOTIFY languageChanged)
+    Q_PROPERTY(bool enableGameMode READ getEnableGameMode WRITE setEnableGameMode NOTIFY enableGameModeChanged);
 
     Q_INVOKABLE bool retranslate();
+    
+    bool getEnableGameMode() const { return enableGameMode; }
+    void setEnableGameMode(bool value);
+    
+#ifdef Q_OS_MACOS
+    Q_INVOKABLE bool updateGameModeInPlist(bool enable);
+    Q_INVOKABLE void restartApplication();
+private:
+    void syncGameModeWithPlist();
+public:
+#endif
 
     // Directly accessible members for preferences
     int width;
@@ -176,6 +188,7 @@ public:
     bool reverseScrollDirection;
     bool swapFaceButtons;
     bool keepAwake;
+    bool enableGameMode;
     int packetSize;
     AudioConfig audioConfig;
     VideoCodecConfig videoCodecConfig;
@@ -224,6 +237,7 @@ signals:
     void captureSysKeysModeChanged();
     void keepAwakeChanged();
     void languageChanged();
+    void enableGameModeChanged();
 
 private:
     explicit StreamingPreferences(QQmlEngine *qmlEngine);
