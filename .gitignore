@@ -1,9 +1,80 @@
+# Qt Creator user files
 *pro.user
+*pro.user.*
 
-
+# Visual Studio files
 **/.vs/
+
+# Build directories
 build/
+debug/
+release/
+Debug/
+Release/
+
+# Qt build artifacts
+Makefile
+Makefile.Debug
+Makefile.Release
+.qmake.stash
+.qmake.cache
+
+# Qt generated files
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+*_qml.cpp
+ui_*.h
+*_qmlcache.qrc
+
+# Static libraries
+*.a
+*.lib
+
+# Dynamic libraries
+*.dylib
+*.dll
+*.so
+
+# Application bundles (macOS)
+*.app/
+
+# Object files
+*.o
+*.obj
+
+# Qt MOC predefs
+moc_predefs.h
+
+# Qt Translation files (compiled)
+*.qm
+
+# Qt plugin stub files
+*.pluginspec
+
+# Qt installer framework
+packages/*/data/
+packages/*/meta/installscript.qs
+
+# Config test artifacts
 config.tests/*/.qmake.stash
 config.tests/*/Makefile
+
+# Platform specific
 .DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+
+# Project documentation (auto-generated)
 CLAUDE.md
