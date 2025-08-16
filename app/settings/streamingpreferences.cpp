@@ -564,17 +564,25 @@ bool StreamingPreferences::hasAwdlAuthorization() const
 
 bool StreamingPreferences::startAwdlControl()
 {
-    if (enableGameMode && m_AwdlController && m_AwdlController->hasValidAuthorization()) {
+    if (enableGameMode && m_AwdlController) {
+        if (!m_AwdlController->hasValidAuthorization()) {
+            m_AwdlController->requestAdminAuthorization();
+        }
+
         return m_AwdlController->startAwdlControl();
     }
-    return true;
+
+    return false;
 }
 
 bool StreamingPreferences::stopAwdlControl()
 {
-    if (enableGameMode && m_AwdlController && m_AwdlController->hasValidAuthorization()) {
+    if (enableGameMode && m_AwdlController) {
+        if (!m_AwdlController->hasValidAuthorization()) {
+            m_AwdlController->requestAdminAuthorization();
+        }
+
         return m_AwdlController->stopAwdlControl();
     }
-    return false;
 }
 #endif
