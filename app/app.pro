@@ -170,7 +170,16 @@ macx {
     # For libsoundio
     LIBS += -framework CoreAudio -framework AudioUnit
 
+    # For AWDL control
+    LIBS += -framework Security
+
     CONFIG += ffmpeg soundio
+
+    SOURCES += \
+        settings/awdlcontroller.cpp
+
+    HEADERS += \
+        settings/awdlcontroller.h
 }
 
 SOURCES += \
