@@ -74,11 +74,6 @@ StreamingPreferences::StreamingPreferences(QQmlEngine *qmlEngine)
             this, &StreamingPreferences::awdlError);
 #endif
     reload();
-#ifdef Q_OS_MACOS
-    QTimer::singleShot(1000, this, [this]() {
-        checkAndRequestAwdlAuthorizationIfNeeded();
-    });
-#endif
 }
 
 StreamingPreferences* StreamingPreferences::get(QQmlEngine *qmlEngine)
@@ -581,12 +576,5 @@ bool StreamingPreferences::stopAwdlControl()
         return m_AwdlController->stopAwdlControl();
     }
     return false;
-}
-
-void StreamingPreferences::checkAndRequestAwdlAuthorizationIfNeeded()
-{
-    if (enableGameMode && m_AwdlController && !m_AwdlController->hasValidAuthorization()) {
-        m_AwdlController->requestAdminAuthorization();
-    }
 }
 #endif
