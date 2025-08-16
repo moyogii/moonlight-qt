@@ -528,8 +528,7 @@ void StreamingPreferences::syncGameModeWithPlist()
     QString bundlePlistPath = QCoreApplication::applicationDirPath() + "/../Info.plist";
     QFileInfo bundleInfo(bundlePlistPath);
     
-    if (!bundleInfo.exists() || !bundleInfo.isWritable()) {
-        qDebug() << "Cannot sync Game Mode: Info.plist not accessible at" << bundlePlistPath;
+    if (!bundleInfo.exists()) {
         return;
     }
     
@@ -541,15 +540,12 @@ void StreamingPreferences::syncGameModeWithPlist()
     process.waitForFinished(5000);
     
     if (process.exitCode() == 0) {
-        QString currentValue = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
-        QString expectedValue = enableGameMode ? "true" : "false";
+        QString plistValue = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+        bool plistGameMode = (plistValue == "true");
         
-        if (currentValue != expectedValue) {
-            updateGameModeInPlist(enableGameMode);
-        }
-    } else {
-        if (enableGameMode) {
-            updateGameModeInPlist(enableGameMode);
+        if (enableGameMode != plistGameMode) {
+            enableGameMode = plistGameMode;
+            emit enableGameModeChanged();
         }
     }
 }
