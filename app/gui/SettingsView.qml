@@ -1773,9 +1773,9 @@ Flickable {
                     ToolTip.delay: 1000
                     ToolTip.timeout: 5000
                     ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Enables macOS Game Mode (macOS 26+). This optimizes system performance for gaming by prioritizing CPU/GPU access.\n\n") +
-                                  qsTr("Requires an app restart to take effect.\n\n") +
-                                  qsTr("Disable this option if you encounter issues or stuttering during streaming.")
+                    ToolTip.text: qsTr("Enables macOS Game Mode (macOS 26+). This optimizes system performance for gaming by prioritizing the CPU/GPU and disabling AWDL (Apple Wireless Direct Link) during streaming.\n\n") +
+                                  qsTr("Requires administrator privileges and an app restart to take effect.\n\n") +
+                                  qsTr("Disable this option if you encounter issues during streaming.")
                 }
             }
         }
@@ -1788,6 +1788,14 @@ Flickable {
               qsTr(" Moonlight will automatically restart to apply this change.\n\nDo you want to continue?")
         
         onAccepted: {
+            if (gameModeCheck.pendingValue) {
+                if (!StreamingPreferences.requestAwdlAuthorization()) {
+                    awdlAuthErrorDialog.open()
+                    gameModeCheck.checked = StreamingPreferences.enableGameMode
+                    return
+                }
+            }
+            
             if (StreamingPreferences.updateGameModeInPlist(gameModeCheck.pendingValue)) {
                 StreamingPreferences.enableGameMode = gameModeCheck.pendingValue
                 StreamingPreferences.restartApplication()
@@ -1798,6 +1806,28 @@ Flickable {
         
         onRejected: {
             gameModeCheck.checked = StreamingPreferences.enableGameMode
+        }
+    }
+    
+    NavigableMessageDialog {
+        id: awdlAuthErrorDialog
+        standardButtons: Dialog.Ok
+        text: qsTr("Game Mode requires administrator access to disable AWDL (Apple Wireless Direct Link) during streaming for optimal performance.\n\n") +
+              qsTr("Please try again and enter your administrator password when prompted.")
+    }
+    
+    NavigableMessageDialog {
+        id: awdlErrorDialog
+        standardButtons: Dialog.Ok
+        property string errorMessage: ""
+        text: qsTr("Game Mode Toggle Error") + "\n\n" + errorMessage
+    }
+    
+    Connections {
+        target: StreamingPreferences
+        function onAwdlError(error) {
+            awdlErrorDialog.errorMessage = error
+            awdlErrorDialog.open()
         }
     }
 }
