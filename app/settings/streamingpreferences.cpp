@@ -1,4 +1,5 @@
 #include "streamingpreferences.h"
+#include "awdlcontroller.h"
 #include "utils.h"
 
 #include <QSettings>
@@ -9,6 +10,7 @@
 #include <QtMath>
 #include <QProcess>
 #include <QFileInfo>
+#include <QTimer>
 
 #include <QtDebug>
 
@@ -62,8 +64,21 @@ static QReadWriteLock s_GlobalPrefsLock;
 
 StreamingPreferences::StreamingPreferences(QQmlEngine *qmlEngine)
     : m_QmlEngine(qmlEngine)
+    , m_AwdlController(nullptr)
 {
+#ifdef Q_OS_MACOS
+    m_AwdlController = new AwdlController(this);
+    connect(m_AwdlController, &AwdlController::authorizationChanged,
+            this, &StreamingPreferences::awdlAuthorizationChanged);
+    connect(m_AwdlController, &AwdlController::errorOccurred,
+            this, &StreamingPreferences::awdlError);
+#endif
     reload();
+#ifdef Q_OS_MACOS
+    QTimer::singleShot(1000, this, [this]() {
+        checkAndRequestAwdlAuthorizationIfNeeded();
+    });
+#endif
 }
 
 StreamingPreferences* StreamingPreferences::get(QQmlEngine *qmlEngine)
@@ -433,6 +448,7 @@ void StreamingPreferences::setEnableGameMode(bool value)
     }
 }
 
+
 bool StreamingPreferences::updateGameModeInPlist(bool enable)
 {
     QString bundlePlistPath = QCoreApplication::applicationDirPath() + "/../Info.plist";
@@ -445,21 +461,52 @@ bool StreamingPreferences::updateGameModeInPlist(bool enable)
         return false;
     }
     
-    QString enableValue = enable ? "YES" : "NO";
+    QString enableValue = enable ? "true" : "false";
     QProcess process;
     
     // Update LSSupportsGameMode key (macOS 26+)
     QStringList arguments;
-    arguments << "-replace" << "LSSupportsGameMode" << "-string" << enableValue << plistPath;
+    arguments << "-c" << QString("Set :LSSupportsGameMode %1").arg(enableValue) << plistPath;
     
-    process.start("plutil", arguments);
+    process.start("/usr/libexec/PlistBuddy", arguments);
     process.waitForFinished(5000);
     
+    bool success = false;
+    
     if (process.exitCode() == 0) {
-        return true;
+        success = true;
     } else {
-        return false;
+        QStringList addArguments;
+        addArguments << "-c" << QString("Add :LSSupportsGameMode bool %1").arg(enableValue) << plistPath;
+        
+        QProcess addProcess;
+        addProcess.start("/usr/libexec/PlistBuddy", addArguments);
+        addProcess.waitForFinished(5000);
+        
+        success = (addProcess.exitCode() == 0);
     }
+    
+    if (success) {
+        clearLaunchServicesCache();
+    }
+    
+    return success;
+}
+
+void StreamingPreferences::clearLaunchServicesCache()
+{
+    QProcess process;
+    QStringList arguments;
+    
+    QString appBundlePath = QCoreApplication::applicationDirPath() + "/..";
+    QFileInfo bundleInfo(appBundlePath);
+    QString canonicalBundlePath = bundleInfo.canonicalFilePath();
+    
+    // Register the specific application bundle to refresh its Info.plist in Launch Services
+    arguments << "-f" << "-r" << canonicalBundlePath;
+    
+    process.start("/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister", arguments);
+    process.waitForFinished(10000); // 10 second timeout
 }
 
 void StreamingPreferences::restartApplication()
@@ -468,14 +515,11 @@ void StreamingPreferences::restartApplication()
     QString appPath = QCoreApplication::applicationFilePath();
     
     QStringList arguments = QCoreApplication::arguments();
-    arguments.removeFirst(); // Remove the application path from arguments
+    arguments.removeFirst();
     
     bool started = QProcess::startDetached(appPath, arguments);
     if (started) {
-        qDebug() << "Successfully started new application instance, exiting current one";
         QCoreApplication::exit(0);
-    } else {
-        qDebug() << "Failed to start new application instance";
     }
 }
 
@@ -491,23 +535,62 @@ void StreamingPreferences::syncGameModeWithPlist()
     
     QProcess process;
     QStringList arguments;
-    arguments << "-extract" << "LSSupportsGameMode" << "raw" << bundlePlistPath;
+    arguments << "-c" << "Print :LSSupportsGameMode" << bundlePlistPath;
     
-    process.start("plutil", arguments);
+    process.start("/usr/libexec/PlistBuddy", arguments);
     process.waitForFinished(5000);
     
     if (process.exitCode() == 0) {
         QString currentValue = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
-        QString expectedValue = enableGameMode ? "YES" : "NO";
+        QString expectedValue = enableGameMode ? "true" : "false";
         
         if (currentValue != expectedValue) {
             updateGameModeInPlist(enableGameMode);
         }
     } else {
-        // LSSupportsGameMode key doesn't exist, add it if enableGameMode is true
         if (enableGameMode) {
             updateGameModeInPlist(enableGameMode);
         }
+    }
+}
+
+bool StreamingPreferences::requestAwdlAuthorization()
+{
+    if (m_AwdlController) {
+        return m_AwdlController->requestAdminAuthorization();
+    }
+    return false;
+}
+
+bool StreamingPreferences::hasAwdlAuthorization() const
+{
+    if (m_AwdlController) {
+        return m_AwdlController->hasValidAuthorization();
+    }
+
+    return false;
+}
+
+bool StreamingPreferences::startAwdlControl()
+{
+    if (enableGameMode && m_AwdlController && m_AwdlController->hasValidAuthorization()) {
+        return m_AwdlController->startAwdlControl();
+    }
+    return true;
+}
+
+bool StreamingPreferences::stopAwdlControl()
+{
+    if (enableGameMode && m_AwdlController && m_AwdlController->hasValidAuthorization()) {
+        return m_AwdlController->stopAwdlControl();
+    }
+    return false;
+}
+
+void StreamingPreferences::checkAndRequestAwdlAuthorizationIfNeeded()
+{
+    if (enableGameMode && m_AwdlController && !m_AwdlController->hasValidAuthorization()) {
+        m_AwdlController->requestAdminAuthorization();
     }
 }
 #endif

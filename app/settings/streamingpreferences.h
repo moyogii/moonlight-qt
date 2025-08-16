@@ -4,6 +4,8 @@
 #include <QRect>
 #include <QQmlEngine>
 
+class AwdlController;
+
 class StreamingPreferences : public QObject
 {
     Q_OBJECT
@@ -152,11 +154,18 @@ public:
     bool getEnableGameMode() const { return enableGameMode; }
     void setEnableGameMode(bool value);
     
+    // AWDL control methods
+    Q_INVOKABLE bool requestAwdlAuthorization();
+    Q_INVOKABLE bool hasAwdlAuthorization() const;
+    bool startAwdlControl();
+    bool stopAwdlControl();
+    
 #ifdef Q_OS_MACOS
     Q_INVOKABLE bool updateGameModeInPlist(bool enable);
     Q_INVOKABLE void restartApplication();
 private:
     void syncGameModeWithPlist();
+    void clearLaunchServicesCache();
 public:
 #endif
 
@@ -238,12 +247,16 @@ signals:
     void keepAwakeChanged();
     void languageChanged();
     void enableGameModeChanged();
+    void awdlAuthorizationChanged(bool hasAuth);
+    void awdlError(const QString &error);
 
 private:
     explicit StreamingPreferences(QQmlEngine *qmlEngine);
 
     QString getSuffixFromLanguage(Language lang);
+    void checkAndRequestAwdlAuthorizationIfNeeded();
 
     QQmlEngine* m_QmlEngine;
+    AwdlController* m_AwdlController;
 };
 
