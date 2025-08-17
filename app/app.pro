@@ -77,8 +77,9 @@ unix:if(!macx|disable-prebuilts) {
     }
 
     !disable-ffmpeg {
-        packagesExist(libavcodec) {
-            PKGCONFIG += libavcodec libavutil libswscale
+        packagesExist(jellyfin-ffmpeg) {
+            PKGCONFIG += jellyfin-ffmpeg
+            DEFINES += USING_JELLYFIN_FFMPEG
             CONFIG += ffmpeg
 
             !disable-libva {
@@ -135,20 +136,22 @@ unix:if(!macx|disable-prebuilts) {
                     CONFIG += libplacebo
                 }
             }
-        }
 
-        !disable-wayland {
-            packagesExist(wayland-client) {
-                CONFIG += wayland
-                PKGCONFIG += wayland-client
+            !disable-wayland {
+                packagesExist(wayland-client) {
+                    CONFIG += wayland
+                    PKGCONFIG += wayland-client
+                }
             }
-        }
 
-        !disable-x11 {
-            packagesExist(x11) {
-                DEFINES += HAS_X11
-                PKGCONFIG += x11
+            !disable-x11 {
+                packagesExist(x11) {
+                    DEFINES += HAS_X11
+                    PKGCONFIG += x11
+                }
             }
+        } else {
+            error("Jellyfin-FFmpeg is required but not found. Please install jellyfin-ffmpeg 7.1+ from https://github.com/jellyfin/jellyfin-ffmpeg/releases")
         }
     }
 }
@@ -161,7 +164,15 @@ win32:!winrt {
 }
 macx {
     !disable-prebuilts {
-        LIBS += -lssl.3 -lcrypto.3 -lavcodec.61 -lavutil.59 -lswscale.8 -lopus -framework SDL2 -framework SDL2_ttf
+        exists($$HOME/jellyfin/dev/include/libavcodec) {
+            INCLUDEPATH += $$HOME/jellyfin/dev/include
+            LIBS += -lssl.3 -lcrypto.3 -lavcodec.61 -lavutil.59 -lswscale.8 -lopus -framework SDL2 -framework SDL2_ttf
+            DEFINES += USING_JELLYFIN_FFMPEG
+            CONFIG += ffmpeg
+        } else {
+            LIBS += -lssl.3 -lcrypto.3 -lavcodec.61 -lavutil.59 -lswscale.8 -lopus -framework SDL2 -framework SDL2_ttf
+            DEFINES += USING_JELLYFIN_FFMPEG
+        }
         CONFIG += discord-rpc
     }
 
