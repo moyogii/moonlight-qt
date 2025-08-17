@@ -31,19 +31,19 @@ fi
 # Check submodules
 echo "Checking submodules..."
 if ! [ -d "moonlight-common-c/moonlight-common-c" ] && [ -d "qmdnsengine/qmdnsengine" ]; then
-    echo "Submodules not found. Run: git submodule update --init --recursive"
+    echo "Error: Submodules not found. Run: git submodule update --init --recursive"
     exit 1
 fi
 
 echo "Testing qmake configuration..."
 if ! qmake6 moonlight-qt.pro; then
-    echo "qmake configuration failed"
+    echo "Error: qmake configuration failed"
     exit 1
 fi
 
 echo "Testing build start..."
 if ! make --dry-run >/dev/null 2>&1; then
-    echo "Build configuration has issues"
+    echo "Error: Build configuration has issues"
     exit 1
 fi
 
@@ -55,5 +55,5 @@ echo "   make release  # for distribution"
 if command -v create-dmg >/dev/null 2>&1; then
     echo "create-dmg is available for DMG creation"
 else
-    echo "Install create-dmg for DMG creation: brew install create-dmg"
+    echo "create-dmg is not available. Install create-dmg: brew install create-dmg"
 fi
