@@ -1267,11 +1267,11 @@ private:
         // Finish cleanup of the connection state
         LiStopConnection();
 
-        // Stop AWDL control if Game Mode was enabled and we have authorization
+        // Stop AWDL control
         if (!m_Session->m_Preferences->stopAwdlControl()) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to stop AWDL control after streaming");
-        } else if (m_Session->m_Preferences->enableGameMode) {
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "AWDL control stopped and interface re-enabled after Game Mode streaming");
+        } else {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "AWDL control stopped and interface re-enabled after streaming");
         }
 
         // Perform a best-effort app quit
@@ -1782,11 +1782,11 @@ void Session::execInternal()
     // We're now active
     s_ActiveSession = this;
 
-    // Start AWDL control if Game Mode is enabled and we have authorization
+    // Start AWDL control for optimal streaming performance
     if (!m_Preferences->startAwdlControl()) {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to start AWDL control for streaming");
-    } else if (m_Preferences->enableGameMode) {
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "AWDL continuous control started for Game Mode streaming");
+    } else {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "AWDL continuous control started for streaming");
     }
 
     // Initialize the gamepad code with our preferences

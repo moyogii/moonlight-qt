@@ -55,7 +55,7 @@
 #define SER_CAPTURESYSKEYS "capturesyskeys"
 #define SER_KEEPAWAKE "keepawake"
 #define SER_LANGUAGE "language"
-#define SER_ENABLEGAMEMODE "enablegamemode"
+
 
 #define CURRENT_DEFAULT_VER 2
 
@@ -160,7 +160,6 @@ void StreamingPreferences::reload()
     reverseScrollDirection = settings.value(SER_REVERSESCROLL, false).toBool();
     swapFaceButtons = settings.value(SER_SWAPFACEBUTTONS, false).toBool();
     keepAwake = settings.value(SER_KEEPAWAKE, true).toBool();
-    enableGameMode = settings.value(SER_ENABLEGAMEMODE, false).toBool();
     enableHdr = settings.value(SER_HDR, false).toBool();
     captureSysKeysMode = static_cast<CaptureSysKeysMode>(settings.value(SER_CAPTURESYSKEYS,
                                                          static_cast<int>(CaptureSysKeysMode::CSK_OFF)).toInt());
@@ -201,11 +200,6 @@ void StreamingPreferences::reload()
         videoCodecConfig = VCC_AUTO;
         enableHdr = true;
     }
-
-#ifdef Q_OS_MACOS
-    // Sync Game Mode preference with Info.plist on startup
-    syncGameModeWithPlist();
-#endif
 }
 
 bool StreamingPreferences::retranslate()
@@ -374,7 +368,6 @@ void StreamingPreferences::save()
     settings.setValue(SER_SWAPFACEBUTTONS, swapFaceButtons);
     settings.setValue(SER_CAPTURESYSKEYS, captureSysKeysMode);
     settings.setValue(SER_KEEPAWAKE, keepAwake);
-    settings.setValue(SER_ENABLEGAMEMODE, enableGameMode);
 }
 
 int StreamingPreferences::getDefaultBitrate(int width, int height, int fps, bool yuv444)
@@ -433,119 +426,7 @@ int StreamingPreferences::getDefaultBitrate(int width, int height, int fps, bool
     return qRound(resolutionFactor * frameRateFactor) * 1000;
 }
 
-/* @TODO: This is a rough hack and only supports MacOS 26+, we need to add support for older versions. */
 #ifdef Q_OS_MACOS
-void StreamingPreferences::setEnableGameMode(bool value)
-{
-    if (enableGameMode != value) {
-        enableGameMode = value;
-        emit enableGameModeChanged();
-    }
-}
-
-
-bool StreamingPreferences::updateGameModeInPlist(bool enable)
-{
-    QString bundlePlistPath = QCoreApplication::applicationDirPath() + "/../Info.plist";
-    QString plistPath;
-    QFileInfo bundleInfo(bundlePlistPath);
-    
-    if (bundleInfo.exists() && bundleInfo.isWritable()) {
-        plistPath = bundlePlistPath;
-    } else {
-        return false;
-    }
-    
-    QString enableValue = enable ? "true" : "false";
-    QProcess process;
-    
-    // Update LSSupportsGameMode key (macOS 26+)
-    QStringList arguments;
-    arguments << "-c" << QString("Set :LSSupportsGameMode %1").arg(enableValue) << plistPath;
-    
-    process.start("/usr/libexec/PlistBuddy", arguments);
-    process.waitForFinished(5000);
-    
-    bool success = false;
-    
-    if (process.exitCode() == 0) {
-        success = true;
-    } else {
-        QStringList addArguments;
-        addArguments << "-c" << QString("Add :LSSupportsGameMode bool %1").arg(enableValue) << plistPath;
-        
-        QProcess addProcess;
-        addProcess.start("/usr/libexec/PlistBuddy", addArguments);
-        addProcess.waitForFinished(5000);
-        
-        success = (addProcess.exitCode() == 0);
-    }
-    
-    if (success) {
-        clearLaunchServicesCache();
-        reSignApplication();
-    }
-    
-    return success;
-}
-
-void StreamingPreferences::clearLaunchServicesCache()
-{
-    QProcess process;
-    QStringList arguments;
-    
-    QString appBundlePath = QCoreApplication::applicationDirPath() + "/..";
-    QFileInfo bundleInfo(appBundlePath);
-    QString canonicalBundlePath = bundleInfo.canonicalFilePath();
-    
-    // Register the specific application bundle to refresh its Info.plist in Launch Services
-    arguments << "-f" << "-r" << canonicalBundlePath;
-    
-    process.start("/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister", arguments);
-    process.waitForFinished(10000); // 10 second timeout
-}
-
-void StreamingPreferences::restartApplication()
-{
-    save();   
-    QString appPath = QCoreApplication::applicationFilePath();
-    
-    QStringList arguments = QCoreApplication::arguments();
-    arguments.removeFirst();
-    
-    bool started = QProcess::startDetached(appPath, arguments);
-    if (started) {
-        QCoreApplication::exit(0);
-    }
-}
-
-void StreamingPreferences::syncGameModeWithPlist()
-{
-    QString bundlePlistPath = QCoreApplication::applicationDirPath() + "/../Info.plist";
-    QFileInfo bundleInfo(bundlePlistPath);
-    
-    if (!bundleInfo.exists()) {
-        return;
-    }
-    
-    QProcess process;
-    QStringList arguments;
-    arguments << "-c" << "Print :LSSupportsGameMode" << bundlePlistPath;
-    
-    process.start("/usr/libexec/PlistBuddy", arguments);
-    process.waitForFinished(5000);
-    
-    if (process.exitCode() == 0) {
-        QString plistValue = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
-        bool plistGameMode = (plistValue == "true");
-        
-        if (enableGameMode != plistGameMode) {
-            enableGameMode = plistGameMode;
-            emit enableGameModeChanged();
-        }
-    }
-}
-
 bool StreamingPreferences::requestAwdlAuthorization()
 {
     if (m_AwdlController) {
@@ -565,7 +446,7 @@ bool StreamingPreferences::hasAwdlAuthorization() const
 
 bool StreamingPreferences::startAwdlControl()
 {
-    if (enableGameMode && m_AwdlController) {
+    if (m_AwdlController) {
         if (!m_AwdlController->hasValidAuthorization()) {
             m_AwdlController->requestAdminAuthorization();
         }
@@ -578,36 +459,14 @@ bool StreamingPreferences::startAwdlControl()
 
 bool StreamingPreferences::stopAwdlControl()
 {
-    if (enableGameMode && m_AwdlController) {
+    if (m_AwdlController) {
         if (!m_AwdlController->hasValidAuthorization()) {
             m_AwdlController->requestAdminAuthorization();
         }
 
         return m_AwdlController->stopAwdlControl();
     }
-}
-
-// Used to resign the application with ad-hoc signing to prevent damaged bundles from info.plist changes
-void StreamingPreferences::reSignApplication()
-{
-    QString appBundlePath = QCoreApplication::applicationDirPath() + "/..";
-    QFileInfo bundleInfo(appBundlePath);
-    QString canonicalBundlePath = bundleInfo.canonicalFilePath();
     
-    QProcess codesignProcess;
-    QStringList arguments;
-    
-    arguments << "--force" << "--deep" << "--sign" << "-" << canonicalBundlePath;
-    
-    codesignProcess.start("codesign", arguments);
-    codesignProcess.waitForFinished(5000);
-    
-    if (codesignProcess.exitCode() != 0) {
-        qWarning() << "Failed to re-sign application after Info.plist changes:";
-        qWarning() << "stdout:" << codesignProcess.readAllStandardOutput();
-        qWarning() << "stderr:" << codesignProcess.readAllStandardError();
-    }
-
-    qDebug() << "Re-signed application after Info.plist changes";
+    return false;
 }
 #endif

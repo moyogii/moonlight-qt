@@ -26,7 +26,7 @@ You can follow development on our [Discord server](https://moonlight-stream.org/
  - Support for both pointer capture (for games) and direct mouse control (for remote desktop)
  - Support for passing system-wide keyboard shortcuts like Alt+Tab to the host
  - Automatic enabling and disabling of AWDL (Apple Wireless Direct Link)
- - Game Mode support (MacOS 26+)
+ - Game Mode support
  
 ## Downloads
 - [Windows, macOS, and Steam Link](https://github.com/moonlight-stream/moonlight-qt/releases)
