@@ -1,0 +1,88 @@
+name: Build macOS App
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        
+    - name: Install dependencies
+      run: |
+        brew install pkg-config qt@6 create-dmg
+        echo "/opt/homebrew/bin" >> $GITHUB_PATH
+        echo "/opt/homebrew/opt/qt@6/bin" >> $GITHUB_PATH
+        
+    - name: Set up jellyfin-ffmpeg
+      run: |
+        mkdir -p $HOME/jellyfin/dev/{include,lib/pkgconfig}
+        cd $HOME/jellyfin
+        git clone --depth 1 --branch v7.1.1-7 https://github.com/jellyfin/jellyfin-ffmpeg.git source
+        cp -r source/libav* dev/include/
+        cat > dev/lib/pkgconfig/jellyfin-ffmpeg.pc << EOF
+        prefix=$HOME/jellyfin/dev
+        exec_prefix=\${prefix}
+        libdir=\${exec_prefix}/lib
+        includedir=\${prefix}/include
+
+        Name: jellyfin-ffmpeg
+        Description: Jellyfin FFmpeg libraries
+        Version: 7.1.1-7
+        Requires: 
+        Libs: -L\${libdir} -lavcodec -lavformat -lavutil -lswscale -lavfilter -lavdevice -lswresample
+        Cflags: -I\${includedir}
+        EOF
+        echo "PKG_CONFIG_PATH=$HOME/jellyfin/dev/lib/pkgconfig:\$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        
+    - name: Build
+      run: |
+        qmake6 moonlight-qt.pro
+        make release
+        
+    - name: Create DMG
+      run: |
+        create-dmg \
+          --volname "Moonlight" \
+          --window-pos 200 120 \
+          --window-size 600 300 \
+          --icon-size 100 \
+          --icon "Moonlight.app" 175 120 \
+          --hide-extension "Moonlight.app" \
+          --app-drop-link 425 120 \
+          "Moonlight.dmg" \
+          "app/Moonlight.app"
+        
+    - name: Get version
+      id: version
+      run: |
+        VERSION="dev-$(git rev-parse --short HEAD)"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Moonlight-${{ steps.version.outputs.version }}-macOS
+        path: Moonlight.dmg
+        
+    - name: Upload to release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: Moonlight.dmg
+        asset_name: Moonlight-${{ steps.version.outputs.version }}-macOS.dmg
+        asset_content_type: application/octet-stream

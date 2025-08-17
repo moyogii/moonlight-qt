@@ -25,7 +25,7 @@ You can follow development on our [Discord server](https://moonlight-stream.org/
  - Gamepad support with force feedback and motion controls for up to 16 players
  - Support for both pointer capture (for games) and direct mouse control (for remote desktop)
  - Support for passing system-wide keyboard shortcuts like Alt+Tab to the host
- - Automatic disabling and enabling of AWDL (Apple Wireless Direct Link)
+ - Automatic enabling and disabling of AWDL (Apple Wireless Direct Link)
  - Game Mode support (MacOS 26+)
  
 ## Downloads
