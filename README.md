@@ -27,6 +27,7 @@ You can follow development on our [Discord server](https://moonlight-stream.org/
  - Support for passing system-wide keyboard shortcuts like Alt+Tab to the host
  - Automatic enabling and disabling of AWDL (Apple Wireless Direct Link)
  - Game Mode support
+ - AV1 Hardware Decoding (Apple Silicon M3 and above)
  
 ## Downloads
 - [Windows, macOS, and Steam Link](https://github.com/moonlight-stream/moonlight-qt/releases)
