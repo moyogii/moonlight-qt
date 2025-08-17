@@ -483,6 +483,7 @@ bool StreamingPreferences::updateGameModeInPlist(bool enable)
     
     if (success) {
         clearLaunchServicesCache();
+        reSignApplication();
     }
     
     return success;
@@ -584,5 +585,29 @@ bool StreamingPreferences::stopAwdlControl()
 
         return m_AwdlController->stopAwdlControl();
     }
+}
+
+// Used to resign the application with ad-hoc signing to prevent damaged bundles from info.plist changes
+void StreamingPreferences::reSignApplication()
+{
+    QString appBundlePath = QCoreApplication::applicationDirPath() + "/..";
+    QFileInfo bundleInfo(appBundlePath);
+    QString canonicalBundlePath = bundleInfo.canonicalFilePath();
+    
+    QProcess codesignProcess;
+    QStringList arguments;
+    
+    arguments << "--force" << "--deep" << "--sign" << "-" << canonicalBundlePath;
+    
+    codesignProcess.start("codesign", arguments);
+    codesignProcess.waitForFinished(5000);
+    
+    if (codesignProcess.exitCode() != 0) {
+        qWarning() << "Failed to re-sign application after Info.plist changes:";
+        qWarning() << "stdout:" << codesignProcess.readAllStandardOutput();
+        qWarning() << "stderr:" << codesignProcess.readAllStandardError();
+    }
+
+    qDebug() << "Re-signed application after Info.plist changes";
 }
 #endif

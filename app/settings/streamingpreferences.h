@@ -166,6 +166,7 @@ public:
 private:
     void syncGameModeWithPlist();
     void clearLaunchServicesCache();
+    void reSignApplication();
 public:
 #endif
 
