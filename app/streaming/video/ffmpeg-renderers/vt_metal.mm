@@ -276,7 +276,9 @@ public:
         };
 
         [m_VideoVertexBuffer release];
-        auto bufferOptions = MTLCPUCacheModeWriteCombined | MTLResourceStorageModeManaged;
+        auto bufferOptions = m_MetalLayer.device.hasUnifiedMemory ? 
+            (MTLCPUCacheModeDefaultCache | MTLResourceStorageModeShared) : 
+            (MTLCPUCacheModeWriteCombined | MTLResourceStorageModeManaged);
         m_VideoVertexBuffer = [m_MetalLayer.device newBufferWithBytes:verts length:sizeof(verts) options:bufferOptions];
         if (!m_VideoVertexBuffer) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
@@ -366,7 +368,10 @@ public:
 
             // Create the new colorspace parameter buffer for our fragment shader
             [m_CscParamsBuffer release];
-            auto bufferOptions = MTLCPUCacheModeWriteCombined | MTLResourceStorageModeManaged;
+
+            auto bufferOptions = m_MetalLayer.device.hasUnifiedMemory ? 
+                (MTLCPUCacheModeDefaultCache | MTLResourceStorageModeShared) : 
+                (MTLCPUCacheModeWriteCombined | MTLResourceStorageModeManaged);
             m_CscParamsBuffer = [m_MetalLayer.device newBufferWithBytes:(void*)&paramBuffer length:sizeof(paramBuffer) options:bufferOptions];
             if (!m_CscParamsBuffer) {
                 SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
@@ -704,8 +709,9 @@ public:
         }
 
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                    "Selected Metal device: %s",
-                    device.name.UTF8String);
+                    "Selected Metal device: %s%s",
+                    device.name.UTF8String,
+                    device.hasUnifiedMemory ? " (Apple Silicon)" : "");
 
         if (m_HwAccel && !checkDecoderCapabilities(device, params)) {
             return false;
@@ -754,9 +760,15 @@ public:
         m_MetalLayer.displaySyncEnabled = params->enableVsync;
 
         // Create the Metal texture cache for our CVPixelBuffers
-        CFStringRef keys[1] = { kCVMetalTextureUsage };
-        NSUInteger values[1] = { MTLTextureUsageShaderRead };
-        auto cacheAttributes = CFDictionaryCreate(kCFAllocatorDefault, (const void**)keys, (const void**)values, 1, nullptr, nullptr);
+        CFStringRef keys[2] = { 
+            kCVMetalTextureUsage,
+            kCVMetalTextureCacheMaximumTextureAgeKey 
+        };
+        NSUInteger values[2] = { 
+            MTLTextureUsageShaderRead,
+            0  // Immediate texture cleanup for memory efficiency
+        };
+        auto cacheAttributes = CFDictionaryCreate(kCFAllocatorDefault, (const void**)keys, (const void**)values, 2, nullptr, nullptr);
         err = CVMetalTextureCacheCreate(kCFAllocatorDefault, cacheAttributes, m_MetalLayer.device, nullptr, &m_TextureCache);
         CFRelease(cacheAttributes);
 
