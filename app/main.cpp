@@ -494,9 +494,13 @@ int main(int argc, char *argv[])
 #endif
 
 #if defined(Q_OS_DARWIN) && defined(QT_DEBUG)
-    // Enable Metal valiation for debug builds
+    // Enable Metal validation for debug builds
     qputenv("MTL_DEBUG_LAYER", "1");
     qputenv("MTL_SHADER_VALIDATION", "1");
+    
+    // Enable Metal HUD overlay for debug builds
+    qputenv("MTL_HUD_ENABLED", "1");
+    qInfo() << "Metal HUD overlay enabled for debug build";
 #endif
 
     // We don't want system proxies to apply to us
@@ -640,6 +644,7 @@ int main(int argc, char *argv[])
 
     // Apply the initial translation based on user preference
     StreamingPreferences::get()->retranslate();
+
 
     // Trickily declare the translation for dialog buttons
     QCoreApplication::translate("QPlatformTheme", "&Yes");
