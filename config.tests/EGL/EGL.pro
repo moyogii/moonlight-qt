@@ -10,4 +10,8 @@ packagesExist(mmal) {
     PKGCONFIG += mmal
 }
 
-PKGCONFIG += sdl2 egl libavcodec libavutil
+packagesExist(jellyfin-ffmpeg) {
+    PKGCONFIG += sdl2 egl jellyfin-ffmpeg
+} else {
+    error("Jellyfin-FFmpeg is required but not found. Please install jellyfin-ffmpeg 7.1+ from https://github.com/jellyfin/jellyfin-ffmpeg/releases")
+}
