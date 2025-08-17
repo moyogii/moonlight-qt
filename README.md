@@ -1,7 +1,7 @@
 # Moonlight PC
 
 ## Disclaimer
-This fork was created for me to learn more about PC streaming and optimize it for my specific setup. Due to this it has a bunch of experimental/in-progress features added that may or may not work for you. If you're looking for a stable experience, you should use the [official Moonlight client](https://github.com/moonlight-stream/moonlight-qt).
+This fork was created to learn more about PC streaming and the MacOS operating system to optimize it for my specific setup. Due to this it has a bunch of experimental/in-progress features added that may or may not work for you. If you're looking for a stable experience, you should use the [official Moonlight client](https://github.com/moonlight-stream/moonlight-qt).
 
 ## About
 
