@@ -62,7 +62,6 @@ bool AwdlController::requestAdminAuthorization()
         emit errorOccurred(tr("Failed to obtain admin privileges"));
     }
     
-    clearAuthorization();
     return false;
 }
 
