@@ -277,7 +277,7 @@ public:
 
         [m_VideoVertexBuffer release];
         auto bufferOptions = m_MetalLayer.device.hasUnifiedMemory ? 
-            (MTLCPUCacheModeDefaultCache | MTLResourceStorageModeShared) : 
+            (MTLCPUCacheModeWriteCombined | MTLResourceStorageModeShared) : 
             (MTLCPUCacheModeWriteCombined | MTLResourceStorageModeManaged);
         m_VideoVertexBuffer = [m_MetalLayer.device newBufferWithBytes:verts length:sizeof(verts) options:bufferOptions];
         if (!m_VideoVertexBuffer) {
@@ -370,8 +370,9 @@ public:
             [m_CscParamsBuffer release];
 
             auto bufferOptions = m_MetalLayer.device.hasUnifiedMemory ? 
-                (MTLCPUCacheModeDefaultCache | MTLResourceStorageModeShared) : 
+                (MTLCPUCacheModeWriteCombined | MTLResourceStorageModeShared) : 
                 (MTLCPUCacheModeWriteCombined | MTLResourceStorageModeManaged);
+                
             m_CscParamsBuffer = [m_MetalLayer.device newBufferWithBytes:(void*)&paramBuffer length:sizeof(paramBuffer) options:bufferOptions];
             if (!m_CscParamsBuffer) {
                 SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
@@ -465,7 +466,7 @@ public:
                                                                              height:planeHeight
                                                                           mipmapped:NO];
             texDesc.cpuCacheMode = MTLCPUCacheModeWriteCombined;
-            texDesc.storageMode = MTLStorageModeManaged;
+            texDesc.storageMode = m_MetalLayer.device.hasUnifiedMemory ? MTLStorageModeShared : MTLStorageModeManaged;
             texDesc.usage = MTLTextureUsageShaderRead;
 
             m_SwMappingTextures[planeIndex] = [m_MetalLayer.device newTextureWithDescriptor:texDesc];
@@ -759,16 +760,9 @@ public:
         // Allow tearing if V-Sync is off (also requires direct display path)
         m_MetalLayer.displaySyncEnabled = params->enableVsync;
 
-        // Create the Metal texture cache for our CVPixelBuffers
-        CFStringRef keys[2] = { 
-            kCVMetalTextureUsage,
-            kCVMetalTextureCacheMaximumTextureAgeKey 
-        };
-        NSUInteger values[2] = { 
-            MTLTextureUsageShaderRead,
-            0  // Immediate texture cleanup for memory efficiency
-        };
-        auto cacheAttributes = CFDictionaryCreate(kCFAllocatorDefault, (const void**)keys, (const void**)values, 2, nullptr, nullptr);
+        CFStringRef keys[1] = { kCVMetalTextureUsage };
+        NSUInteger values[1] = { MTLTextureUsageShaderRead };
+        auto cacheAttributes = CFDictionaryCreate(kCFAllocatorDefault, (const void**)keys, (const void**)values, 1, nullptr, nullptr);
         err = CVMetalTextureCacheCreate(kCFAllocatorDefault, cacheAttributes, m_MetalLayer.device, nullptr, &m_TextureCache);
         CFRelease(cacheAttributes);
 
@@ -823,7 +817,7 @@ public:
                                                                          height:newSurface->h
                                                                       mipmapped:NO];
         texDesc.cpuCacheMode = MTLCPUCacheModeWriteCombined;
-        texDesc.storageMode = MTLStorageModeManaged;
+        texDesc.storageMode = m_MetalLayer.device.hasUnifiedMemory ? MTLStorageModeShared : MTLStorageModeManaged;
         texDesc.usage = MTLTextureUsageShaderRead;
         auto newTexture = [m_MetalLayer.device newTextureWithDescriptor:texDesc];
 
