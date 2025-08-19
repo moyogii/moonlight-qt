@@ -11,6 +11,9 @@
 #include "streaming/streamutils.h"
 #include "path.h"
 
+// Forward declaration for queue monitoring
+extern "C" int LiGetPendingVideoFrames(void);
+
 #import <Cocoa/Cocoa.h>
 #import <VideoToolbox/VideoToolbox.h>
 #import <AVFoundation/AVFoundation.h>
@@ -221,14 +224,36 @@ public:
             }
 
             if (m_MetalLayer.displaySyncEnabled) {
-                // Pace ourselves by waiting if too many frames are pending presentation
+                // Queue overflow prevention for decode pipeline
+                int pendingDecodeFrames = LiGetPendingVideoFrames();
+                
                 SDL_LockMutex(m_PresentationMutex);
-                if (m_PendingPresentationCount > 2) {
-                    if (SDL_CondWaitTimeout(m_PresentationCond, m_PresentationMutex, 100) == SDL_MUTEX_TIMEDOUT) {
-                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                    "Presentation wait timed out after 100 ms");
+                int pendingRenderCount = m_PendingPresentationCount;
+                
+                bool shouldDrop = false;
+                int waitTimeout = 8;
+                
+                if (pendingDecodeFrames > 12) {
+                    shouldDrop = true;
+                    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                               "Frame dropped: decode queue critical (%d/15)", pendingDecodeFrames);
+                } else if (pendingDecodeFrames > 8 && pendingRenderCount > 1) {
+                    waitTimeout = 2;
+                }
+                
+                if (!shouldDrop && pendingRenderCount > 1) {
+                    if (SDL_CondWaitTimeout(m_PresentationCond, m_PresentationMutex, waitTimeout) == SDL_MUTEX_TIMEDOUT) {
+                        shouldDrop = true;
                     }
                 }
+                
+                if (shouldDrop) {
+                    SDL_UnlockMutex(m_PresentationMutex);
+                    [m_NextDrawable release];
+                    m_NextDrawable = nullptr;
+                    return;
+                }
+                
                 SDL_UnlockMutex(m_PresentationMutex);
             }
         }
@@ -243,7 +268,13 @@ public:
     bool updateVideoRegionSizeForFrame(AVFrame* frame)
     {
         int drawableWidth, drawableHeight;
-        SDL_Metal_GetDrawableSize(m_Window, &drawableWidth, &drawableHeight);
+    
+        if (m_LastDrawableWidth > 0 && m_LastDrawableHeight > 0) {
+            drawableWidth = m_LastDrawableWidth;
+            drawableHeight = m_LastDrawableHeight;
+        } else {
+            SDL_Metal_GetDrawableSize(m_Window, &drawableWidth, &drawableHeight);
+        }
 
         // Check if anything has changed since the last vertex buffer upload
         if (m_VideoVertexBuffer &&
@@ -251,6 +282,11 @@ public:
                 drawableWidth == m_LastDrawableWidth && drawableHeight == m_LastDrawableHeight) {
             // Nothing to do
             return true;
+        }
+        
+        // Only call SDL when we actually need to update (size might have changed)
+        if (drawableWidth != m_LastDrawableWidth || drawableHeight != m_LastDrawableHeight) {
+            SDL_Metal_GetDrawableSize(m_Window, &drawableWidth, &drawableHeight);
         }
 
         // Determine the correct scaled size for the video region
@@ -275,15 +311,24 @@ public:
             { { renderRect.x+renderRect.w, renderRect.y+renderRect.h, 0.0f, 1.0f }, { 1.0f, 0} },
         };
 
-        [m_VideoVertexBuffer release];
-        auto bufferOptions = m_MetalLayer.device.hasUnifiedMemory ? 
-            (MTLCPUCacheModeWriteCombined | MTLResourceStorageModeShared) : 
-            (MTLCPUCacheModeWriteCombined | MTLResourceStorageModeManaged);
-        m_VideoVertexBuffer = [m_MetalLayer.device newBufferWithBytes:verts length:sizeof(verts) options:bufferOptions];
         if (!m_VideoVertexBuffer) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                         "Failed to create video vertex buffer");
-            return false;
+            auto bufferOptions = m_MetalLayer.device.hasUnifiedMemory ? 
+                (MTLCPUCacheModeWriteCombined | MTLResourceStorageModeShared) : 
+                (MTLCPUCacheModeWriteCombined | MTLResourceStorageModeManaged);
+            m_VideoVertexBuffer = [m_MetalLayer.device newBufferWithLength:sizeof(verts) options:bufferOptions];
+            if (!m_VideoVertexBuffer) {
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                             "Failed to create video vertex buffer");
+                return false;
+            }
+        }
+        
+        // Update existing buffer contents instead of recreating
+        memcpy([m_VideoVertexBuffer contents], verts, sizeof(verts));
+        
+        // Sync memory for non-unified memory systems
+        if (!m_MetalLayer.device.hasUnifiedMemory) {
+            [m_VideoVertexBuffer didModifyRange:NSMakeRange(0, sizeof(verts))];
         }
 
         m_LastFrameWidth = frame->width;
@@ -488,18 +533,42 @@ public:
     // Caller frees frame after we return
     virtual void renderFrame(AVFrame* frame) override
     { @autoreleasepool {
-        // Handle changes to the frame's colorspace from last time we rendered
+        // Apply backpressure to prevent decode queue overflow
+        if (m_MetalLayer.displaySyncEnabled) {
+            SDL_LockMutex(m_PresentationMutex);
+            int pendingRenderCount = m_PendingPresentationCount;
+            SDL_UnlockMutex(m_PresentationMutex);
+            
+            int pendingDecodeFrames = LiGetPendingVideoFrames();
+            int backPressure = 0;
+            
+            if (pendingDecodeFrames > 10) {
+                backPressure += (pendingDecodeFrames - 10) * 5;
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                           "Decode queue pressure: %d/15 frames", pendingDecodeFrames);
+            } else if (pendingDecodeFrames > 5) {
+                backPressure += (pendingDecodeFrames - 5) * 2;
+            }
+            
+            if (pendingRenderCount > 1) {
+                backPressure += pendingRenderCount * 2;
+            }
+            
+            if (backPressure > 0) {
+                backPressure = SDL_min(backPressure, 20);
+                SDL_Delay(backPressure);
+            }
+        }
         if (!updateColorSpaceForFrame(frame)) {
-            // Trigger the main thread to recreate the decoder
+            // Trigger decoder recreation for unsupported colorspace
             SDL_Event event;
             event.type = SDL_RENDER_DEVICE_RESET;
             SDL_PushEvent(&event);
             return;
         }
 
-        // Handle changes to the video size or drawable size
         if (!updateVideoRegionSizeForFrame(frame)) {
-            // Trigger the main thread to recreate the decoder
+            // Trigger decoder recreation for size change
             SDL_Event event;
             event.type = SDL_RENDER_DEVICE_RESET;
             SDL_PushEvent(&event);
@@ -636,12 +705,15 @@ public:
 
         [renderEncoder endEncoding];
 
+        // Track pending presentations for pacing BEFORE committing (if display sync enabled)
         if (m_MetalLayer.displaySyncEnabled) {
-            // Queue a completion callback on the drawable to pace our rendering
             SDL_LockMutex(m_PresentationMutex);
             m_PendingPresentationCount++;
             SDL_UnlockMutex(m_PresentationMutex);
-            [m_NextDrawable addPresentedHandler:^(id<MTLDrawable>) {
+            
+            // Add presentation completion handler for pacing
+            [commandBuffer addCompletedHandler:^(id<MTLCommandBuffer>) {
+                // This handler runs when GPU completes command buffer processing
                 SDL_LockMutex(m_PresentationMutex);
                 m_PendingPresentationCount--;
                 SDL_CondSignal(m_PresentationCond);
@@ -652,9 +724,6 @@ public:
         // Flip to the newly rendered buffer
         [commandBuffer presentDrawable:m_NextDrawable];
         [commandBuffer commit];
-
-        // Wait for the command buffer to complete and free our CVMetalTextureCache references
-        [commandBuffer waitUntilCompleted];
 
         [m_NextDrawable release];
         m_NextDrawable = nullptr;
