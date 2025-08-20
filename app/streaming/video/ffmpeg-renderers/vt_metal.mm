@@ -147,6 +147,15 @@ public:
 
     virtual ~VTMetalRenderer() override
     { @autoreleasepool {
+        // Wait for any pending presentations to complete
+        if (m_PresentationMutex != nullptr && m_PresentationCond != nullptr) {
+            SDL_LockMutex(m_PresentationMutex);
+            while (m_PendingPresentationCount > 0) {
+                SDL_CondWait(m_PresentationCond, m_PresentationMutex);
+            }
+            SDL_UnlockMutex(m_PresentationMutex);
+        }
+
         if (m_PresentationCond != nullptr) {
             SDL_DestroyCond(m_PresentationCond);
         }
@@ -192,10 +201,14 @@ public:
         }
 
         if (m_CommandQueue != nullptr) {
+            // Ensure all pending Metal operations complete before cleanup
+            [m_CommandQueue finish];
             [m_CommandQueue release];
         }
 
         if (m_TextureCache != nullptr) {
+            // Flush any remaining textures before releasing the cache
+            CVMetalTextureCacheFlush(m_TextureCache, 0);
             CFRelease(m_TextureCache);
         }
 
@@ -233,11 +246,11 @@ public:
                 bool shouldDrop = false;
                 int waitTimeout = 8;
                 
-                if (pendingDecodeFrames > 12) {
+                if (pendingDecodeFrames > 10) {
                     shouldDrop = true;
                     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                                "Frame dropped: decode queue critical (%d/15)", pendingDecodeFrames);
-                } else if (pendingDecodeFrames > 8 && pendingRenderCount > 1) {
+                } else if (pendingDecodeFrames > 6 && pendingRenderCount > 1) {
                     waitTimeout = 2;
                 }
                 
@@ -542,12 +555,12 @@ public:
             int pendingDecodeFrames = LiGetPendingVideoFrames();
             int backPressure = 0;
             
-            if (pendingDecodeFrames > 10) {
-                backPressure += (pendingDecodeFrames - 10) * 5;
+            if (pendingDecodeFrames > 8) {
+                backPressure += (pendingDecodeFrames - 8) * 5;
                 SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                            "Decode queue pressure: %d/15 frames", pendingDecodeFrames);
-            } else if (pendingDecodeFrames > 5) {
-                backPressure += (pendingDecodeFrames - 5) * 2;
+            } else if (pendingDecodeFrames > 4) {
+                backPressure += (pendingDecodeFrames - 4) * 2;
             }
             
             if (pendingRenderCount > 1) {
