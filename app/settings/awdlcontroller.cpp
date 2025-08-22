@@ -27,47 +27,70 @@ AwdlController::~AwdlController()
 {
     stopAwdlControl();
     closeRouteSocket();
-    clearAuthorization();
 }
 
 bool AwdlController::requestAdminAuthorization()
 {
-    clearAuthorization();
-    
-    OSStatus status = AuthorizationCreate(nullptr, kAuthorizationEmptyEnvironment,
-                                         kAuthorizationFlagDefaults, &m_authRef);
-    if (status != errAuthorizationSuccess) {
-        emit errorOccurred(tr("Failed to create authorization"));
+    if (!hasValidAuthorization()) {
+        clearAuthorization();
+        
+        OSStatus status = AuthorizationCreate(nullptr, kAuthorizationEmptyEnvironment,
+                                             kAuthorizationFlagDefaults, &m_authRef);
+        if (status != errAuthorizationSuccess) {
+            emit errorOccurred(tr("Failed to create authorization"));
+            return false;
+        }
+        
+        AuthorizationItem authItem = { kAuthorizationRightExecute, 0, nullptr, 0 };
+        AuthorizationRights authRights = { 1, &authItem };
+        
+        AuthorizationFlags flags = kAuthorizationFlagInteractionAllowed |
+                                  kAuthorizationFlagPreAuthorize |
+                                  kAuthorizationFlagExtendRights;
+        
+        status = AuthorizationCopyRights(m_authRef, &authRights, nullptr, flags, nullptr);
+        
+        if (status == errAuthorizationSuccess) {
+            m_hasValidAuth = true;
+            emit authorizationChanged(true);
+            qDebug() << "Successfully obtained AWDL authorization";
+            return true;
+        }
+        
+        if (status == errAuthorizationCanceled) {
+            emit errorOccurred(tr("Authorization canceled"));
+        } else {
+            emit errorOccurred(tr("Failed to obtain admin privileges"));
+        }
+        
+        clearAuthorization();
         return false;
     }
-    
-    AuthorizationItem authItem = { kAuthorizationRightExecute, 0, nullptr, 0 };
-    AuthorizationRights authRights = { 1, &authItem };
-    
-    AuthorizationFlags flags = kAuthorizationFlagInteractionAllowed |
-                              kAuthorizationFlagPreAuthorize |
-                              kAuthorizationFlagExtendRights;
-    
-    status = AuthorizationCopyRights(m_authRef, &authRights, nullptr, flags, nullptr);
-    
-    if (status == errAuthorizationSuccess) {
-        m_hasValidAuth = true;
-        emit authorizationChanged(true);
-        return true;
-    }
-    
-    if (status == errAuthorizationCanceled) {
-        emit errorOccurred(tr("Authorization canceled"));
-    } else {
-        emit errorOccurred(tr("Failed to obtain admin privileges"));
-    }
-    
-    return false;
+
+    return true;
 }
 
 bool AwdlController::hasValidAuthorization() const
 {
-    return m_hasValidAuth;
+    if (!m_hasValidAuth || !m_authRef) {
+        return false;
+    }
+    
+    // Check if the authorization is still valid by attempting to copy rights
+    // without interaction. If it fails, the authorization has expired.
+    AuthorizationItem authItem = { kAuthorizationRightExecute, 0, nullptr, 0 };
+    AuthorizationRights authRights = { 1, &authItem };
+    
+    OSStatus status = AuthorizationCopyRights(m_authRef, &authRights, nullptr,
+                                              kAuthorizationFlagExtendRights |
+                                              kAuthorizationFlagPreAuthorize,
+                                              nullptr);
+    
+    if (status != errAuthorizationSuccess) {
+        const_cast<AwdlController*>(this)->m_hasValidAuth = false;
+    }
+    
+    return status == errAuthorizationSuccess;
 }
 
 bool AwdlController::startAwdlControl()
@@ -77,19 +100,25 @@ bool AwdlController::startAwdlControl()
     }
     
     if (!hasValidAuthorization()) {
-        if (!requestAdminAuthorization()) {
-            emit errorOccurred(tr("No authorization for AWDL control"));
+        if (!setupRouteSocket()) {
+            if (!requestAdminAuthorization()) {
+                emit errorOccurred(tr("No authorization for AWDL control"));
+                return false;
+            }
+            if (!setupRouteSocket()) {
+                emit errorOccurred(tr("Failed to setup network monitoring"));
+                return false;
+            }
+        }
+    } else {
+        if (!setupRouteSocket()) {
+            emit errorOccurred(tr("Failed to setup network monitoring"));
             return false;
         }
     }
     
-    if (!setupRouteSocket()) {
-        emit errorOccurred(tr("Failed to setup network monitoring"));
-        return false;
-    }
-    
     m_controlActive = true;
-    setAwdlInterfaceState(false); // Disable immediately
+    setAwdlInterfaceState(false);
     return true;
 }
 
@@ -142,12 +171,20 @@ void AwdlController::onRouteSocketReady()
 
 bool AwdlController::setAwdlInterfaceState(bool enable)
 {
-    if (!hasValidAuthorization()) {
+    if (enable && !hasValidAuthorization()) {
         return false;
     }
     
     QString command = enable ? "up" : "down";
-    return executePrivilegedIfconfigCommand(QString("awdl0 %1").arg(command));
+    bool result = executePrivilegedIfconfigCommand(QString("awdl0 %1").arg(command));
+    
+    if (!result && !enable && !hasValidAuthorization()) {
+        if (requestAdminAuthorization()) {
+            result = executePrivilegedIfconfigCommand(QString("awdl0 %1").arg(command));
+        }
+    }
+    
+    return result;
 }
 
 bool AwdlController::executePrivilegedIfconfigCommand(const QString &command)

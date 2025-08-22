@@ -450,10 +450,6 @@ bool StreamingPreferences::hasAwdlAuthorization() const
 bool StreamingPreferences::startAwdlControl()
 {
     if (m_AwdlController) {
-        if (!m_AwdlController->hasValidAuthorization()) {
-            m_AwdlController->requestAdminAuthorization();
-        }
-
         return m_AwdlController->startAwdlControl();
     }
 
@@ -463,10 +459,6 @@ bool StreamingPreferences::startAwdlControl()
 bool StreamingPreferences::stopAwdlControl()
 {
     if (m_AwdlController) {
-        if (!m_AwdlController->hasValidAuthorization()) {
-            m_AwdlController->requestAdminAuthorization();
-        }
-
         return m_AwdlController->stopAwdlControl();
     }
     
