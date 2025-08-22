@@ -27,7 +27,7 @@ You can follow development on our [Discord server](https://moonlight-stream.org/
  - Support for passing system-wide keyboard shortcuts like Alt+Tab to the host
  - Automatic enabling and disabling of AWDL (Apple Wireless Direct Link)
  - Game Mode support
- - AV1 Hardware Decoding (Apple Silicon M3 and above)
+ - Built using Jellyfin-FFmpeg for AV1 hardware decoding support (Apple Silicon M3 and above)
  - Clipboard Sync (Requires [Apollo](https://github.com/ClassicOldSong/Apollo))
  
 ## Downloads
