@@ -31,10 +31,6 @@ jobs:
         # Update version.txt with the new version
         echo "$FULL_VERSION" > app/version.txt
         
-        # Generate simple changelog based on commits since last release
-        echo "## Changes in Build $BUILD_NUMBER" > changelog.md
-        echo "" >> changelog.md
-        
         # Get the last release tag to compare against
         LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
         
@@ -49,16 +45,8 @@ jobs:
         fi
         
         echo "" >> changelog.md
-        echo "" >> changelog.md
-        echo "### Build Information:" >> changelog.md
-        echo "- Version: $FULL_VERSION" >> changelog.md
-        echo "- Build Number: $BUILD_NUMBER" >> changelog.md
-        echo "- Commit: $(git rev-parse --short HEAD)" >> changelog.md
-        echo "- Branch: ${{ github.ref_name }}" >> changelog.md
-        echo "" >> changelog.md
-        echo "Download the DMG from the assets below." >> changelog.md
+        echo "Download the ad-hoc DMG from the assets below." >> changelog.md
         
-        # Create appropriate compare link
         if [ -n "$LAST_TAG" ]; then
           echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${FULL_VERSION}" >> changelog.md
         else
@@ -150,7 +138,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v${{ steps.version.outputs.version }}
-        name: "Moonlight v${{ steps.version.outputs.version }} - Build ${{ steps.version.outputs.build_number }}"
+        name: "Moonlight v${{ steps.version.outputs.version }}"
         body_path: changelog.md
         files: |
           Moonlight-v${{ steps.version.outputs.version }}-macOS.dmg
