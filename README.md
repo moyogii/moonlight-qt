@@ -1,19 +1,11 @@
 # Moonlight Mac
 
 ## Disclaimer
-This fork was created to learn more about PC streaming and the MacOS operating system to optimize it for my specific setup. Due to this it has a bunch of experimental/in-progress features added that may or may not work for you. If you're looking for a stable experience, you should use the [official Moonlight client](https://github.com/moonlight-stream/moonlight-qt).
+This fork was created to learn more about PC streaming and the MacOS operating system to optimize it for my specific setup. Due to this it has a bunch of experimental/in-progress features added that may or may not work for you. If you're looking for a stable experience, you should use the [official Moonlight client](https://github.com/moonlight-stream/moonlight-qt) for Mac.
 
 ## About
 
 [Moonlight](https://moonlight-stream.org) is an open source PC client for NVIDIA GameStream and [Sunshine](https://github.com/LizardByte/Sunshine).
-
-Moonlight also has mobile versions for [Android](https://github.com/moonlight-stream/moonlight-android) and [iOS](https://github.com/moonlight-stream/moonlight-ios).
-
-You can follow development on our [Discord server](https://moonlight-stream.org/discord) and help translate Moonlight into your language on [Weblate](https://hosted.weblate.org/projects/moonlight/moonlight-qt/).
-
- [![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/glj5cxqwy2w3bglv/branch/master?svg=true)](https://ci.appveyor.com/project/cgutman/moonlight-qt/branch/master)
- [![Downloads](https://img.shields.io/github/downloads/moonlight-stream/moonlight-qt/total)](https://github.com/moonlight-stream/moonlight-qt/releases)
- [![Translation Status](https://hosted.weblate.org/widgets/moonlight/-/moonlight-qt/svg-badge.svg)](https://hosted.weblate.org/projects/moonlight/moonlight-qt/)
 
 ## Features
  - Hardware accelerated video decoding on Mac
@@ -31,13 +23,7 @@ You can follow development on our [Discord server](https://moonlight-stream.org/
  - Clipboard Sync (Requires [Apollo](https://github.com/ClassicOldSong/Apollo))
  
 ## Downloads
-- [macOS](https://github.com/moyogii/moonlight-qt/releases)
-
-#### Special Thanks
-
-[![Hosted By: Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith&style=flat-square)](https://cloudsmith.com)
-
-Hosting for Moonlight's Debian and L4T package repositories is graciously provided for free by [Cloudsmith](https://cloudsmith.com).
+- [macOS](https://github.com/moyogii/moonlight-mac/releases)
 
 ## Building
 
@@ -94,9 +80,7 @@ export PKG_CONFIG_PATH="$HOME/jellyfin/dev/lib/pkgconfig:$PKG_CONFIG_PATH"
 3. Run `git submodule update --init --recursive` from within `moonlight-qt/`
 4. Open the project in Qt Creator or build from qmake on the command line.
     * To build a binary for use on non-development machines, use the scripts in the `scripts` folder.
-        * For Windows builds, use `scripts\build-arch.bat` and `scripts\generate-bundle.bat`. Execute these scripts from the root of the repository within a Qt command prompt. Ensure  7-Zip binary directory is on your `%PATH%`.
         * For macOS builds, the GitHub Actions workflow automatically creates DMG files. For manual DMG creation, use `create-dmg` directly.
-        * For Steam Link builds, run `scripts/build-steamlink-app.sh` from the root of the repository.
     * To build from the command line for development use on macOS or Linux:
         ```bash
         # Ensure jellyfin-ffmpeg is in PKG_CONFIG_PATH (if using the macOS setup)
@@ -120,4 +104,9 @@ export PKG_CONFIG_PATH="$HOME/jellyfin/dev/lib/pkgconfig:$PKG_CONFIG_PATH"
 2. Write code
 3. Send Pull Requests
 
-Check out our [website](https://moonlight-stream.org) for project links and information.
+## Credits
+- [Moonlight](https://github.com/moonlight-stream/moonlight-qt)
+- [Apollo](https://github.com/ClassicOldSong/Apollo)
+- [Jellyfin-FFmpeg](https://github.com/jellyfin/jellyfin-ffmpeg)
+
+Check out the [Moonlight Website](https://moonlight-stream.org) for project links and information.
