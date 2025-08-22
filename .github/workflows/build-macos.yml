@@ -1,23 +1,79 @@
-name: Build macOS App
+name: Build and Release macOS App
 
 on:
   push:
     branches: [ master, main ]
   pull_request:
     branches: [ master, main ]
-  release:
-    types: [ published ]
   workflow_dispatch:
 
 jobs:
   build-macos:
     runs-on: macos-latest
+    permissions:
+      contents: write
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         submodules: recursive
+        fetch-depth: 0
+        
+    - name: Generate version and changelog
+      id: version
+      run: |
+        # Generate incremental version using run number
+        BASE_VERSION=$(cat app/version.txt | cut -d'.' -f1-2)
+        BUILD_NUMBER=${{ github.run_number }}
+        FULL_VERSION="${BASE_VERSION}.${BUILD_NUMBER}"
+        
+        # Update version.txt with the new version
+        echo "$FULL_VERSION" > app/version.txt
+        
+        # Generate simple changelog based on commits since last release
+        echo "## Changes in Build $BUILD_NUMBER" > changelog.md
+        echo "" >> changelog.md
+        
+        # Get the last release tag to compare against
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        
+        if [ -n "$LAST_TAG" ]; then
+          echo "### Commits since $LAST_TAG:" >> changelog.md
+          echo "" >> changelog.md
+          git log $LAST_TAG..HEAD --pretty=format:"- %s (%h)" --reverse >> changelog.md
+        else
+          echo "### Recent commits:" >> changelog.md
+          echo "" >> changelog.md
+          git log --oneline -10 --pretty=format:"- %s (%h)" >> changelog.md
+        fi
+        
+        echo "" >> changelog.md
+        echo "" >> changelog.md
+        echo "### Build Information:" >> changelog.md
+        echo "- Version: $FULL_VERSION" >> changelog.md
+        echo "- Build Number: $BUILD_NUMBER" >> changelog.md
+        echo "- Commit: $(git rev-parse --short HEAD)" >> changelog.md
+        echo "- Branch: ${{ github.ref_name }}" >> changelog.md
+        echo "" >> changelog.md
+        echo "Download the DMG from the assets below." >> changelog.md
+        
+        # Create appropriate compare link
+        if [ -n "$LAST_TAG" ]; then
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${FULL_VERSION}" >> changelog.md
+        else
+          echo "**Full Changelog**: https://github.com/${{ github.repository }}/commits/v${FULL_VERSION}" >> changelog.md
+        fi
+        
+        # Output variables for later steps
+        echo "version=$FULL_VERSION" >> $GITHUB_OUTPUT
+        echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+        echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+        
+        # Display version info
+        echo "Generated version: $FULL_VERSION"
+        echo "Changelog preview:"
+        cat changelog.md
         
     - name: Install dependencies
       run: |
@@ -65,39 +121,41 @@ jobs:
         
     - name: Create DMG
       run: |
+        DMG_NAME="Moonlight-v${{ steps.version.outputs.version }}-macOS.dmg"
         create-dmg \
-          --volname "Moonlight" \
+          --volname "Moonlight v${{ steps.version.outputs.version }}" \
           --window-pos 200 120 \
           --window-size 600 300 \
           --icon-size 100 \
           --icon "Moonlight.app" 175 120 \
           --hide-extension "Moonlight.app" \
           --app-drop-link 425 120 \
-          "Moonlight.dmg" \
+          "$DMG_NAME" \
           "app/Moonlight.app"
 
-        codesign --force --sign - "Moonlight.dmg"
-        xattr -cr "Moonlight.dmg" || true
+        codesign --force --sign - "$DMG_NAME"
+        xattr -cr "$DMG_NAME" || true
         
-    - name: Get version
-      id: version
-      run: |
-        VERSION="dev-$(git rev-parse --short HEAD)"
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        # Create a generic symlink for easier artifact handling
+        ln -sf "$DMG_NAME" "Moonlight.dmg"
         
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Moonlight-${{ steps.version.outputs.version }}-macOS
+        name: Moonlight-v${{ steps.version.outputs.version }}-macOS
         path: Moonlight.dmg
         
-    - name: Upload to release
-      if: github.event_name == 'release'
-      uses: actions/upload-release-asset@v1
+    - name: Create Release
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        name: "Moonlight v${{ steps.version.outputs.version }} - Build ${{ steps.version.outputs.build_number }}"
+        body_path: changelog.md
+        files: |
+          Moonlight-v${{ steps.version.outputs.version }}-macOS.dmg
+        draft: false
+        prerelease: false
+        make_latest: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: Moonlight.dmg
-        asset_name: Moonlight-${{ steps.version.outputs.version }}-macOS.dmg
-        asset_content_type: application/octet-stream
