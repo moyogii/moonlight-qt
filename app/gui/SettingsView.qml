@@ -979,6 +979,22 @@ Flickable {
                     ToolTip.visible: hovered
                     ToolTip.text: qsTr("This will close the app or game you are streaming when you end your stream. You will lose any unsaved progress!")
                 }
+                
+                CheckBox {
+                    id: clipboardSyncCheck
+                    width: parent.width
+                    text: qsTr("Clipboard Sync")
+                    font.pointSize: 12
+                    checked: StreamingPreferences.enableClipboardSync
+                    onCheckedChanged: {
+                        StreamingPreferences.enableClipboardSync = checked
+                    }
+                    
+                    ToolTip.delay: 1000
+                    ToolTip.timeout: 5000
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Automatically sync your clipboard between the host and client when the streaming window changes focus. (Requires Apollo)")
+                }
             }
         }
 

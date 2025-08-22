@@ -2,6 +2,7 @@
 #include "settings/streamingpreferences.h"
 #include "streaming/streamutils.h"
 #include "backend/richpresencemanager.h"
+#include "backend/nvhttp.h"
 
 #include <Limelight.h>
 #include "SDL_compat.h"
@@ -54,6 +55,9 @@
 #include <QCursor>
 #include <QWindow>
 #include <QScreen>
+#include <QDateTime>
+#include <QRandomGenerator>
+#include <QTimer>
 
 #define CONN_TEST_SERVER "qt.conntest.moonlight-stream.org"
 
@@ -2102,12 +2106,14 @@ void Session::execInternal()
                 if (m_Preferences->muteOnFocusLoss) {
                     m_AudioMuted = true;
                 }
+                syncClipboardFromServer();
                 m_InputHandler->notifyFocusLost();
                 break;
             case SDL_WINDOWEVENT_FOCUS_GAINED:
                 if (m_Preferences->muteOnFocusLoss) {
                     m_AudioMuted = false;
                 }
+                syncClipboardToServer();
                 break;
             case SDL_WINDOWEVENT_LEAVE:
                 m_InputHandler->notifyMouseLeave();
@@ -2419,5 +2425,76 @@ DispatchDeferredCleanup:
     // When it is complete, it will release our s_ActiveSessionSemaphore
     // reference.
     QThreadPool::globalInstance()->start(new DeferredSessionCleanupTask(this));
+}
+
+void Session::syncClipboardToServer()
+{
+    StreamingPreferences* prefs = StreamingPreferences::get();
+    if (!prefs->enableClipboardSync) {
+        return;
+    }
+    
+    if (!SDL_HasClipboardText()) {
+        return;
+    }
+
+    char* clipboardText = SDL_GetClipboardText();
+    if (!clipboardText || strlen(clipboardText) == 0) {
+        if (clipboardText) {
+            SDL_free(clipboardText);
+        }
+        return;
+    }
+
+    QString currentText = QString::fromUtf8(clipboardText);
+    SDL_free(clipboardText);
+
+    if (currentText == m_LastClipboardText) {
+        return;
+    }
+
+    QTimer::singleShot(0, [this, currentText]() {
+        try {
+            NvHTTP http(m_Computer);
+            http.setClipboard(currentText);
+            m_LastClipboardText = currentText;
+            
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Clipboard synced to server successfull");
+        }
+        catch (const std::exception& e) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to sync clipboard to server");
+        }
+    });
+}
+
+void Session::syncClipboardFromServer()
+{
+    StreamingPreferences* prefs = StreamingPreferences::get();
+    if (!prefs->enableClipboardSync) {
+        return;
+    }
+
+    QTimer::singleShot(0, [this]() {
+        try {
+            NvHTTP http(m_Computer);
+            QString serverClipboard = http.getClipboard();
+            
+            if (serverClipboard.isEmpty()) {
+                return;
+            }
+
+            if (serverClipboard != m_LastClipboardText) {
+                m_LastClipboardText = serverClipboard;
+                SDL_SetClipboardText(serverClipboard.toUtf8().constData());
+                
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Clipboard synced from server to host");
+            } else {
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Server clipboard same as last known text, no update needed");
+            }
+        }
+        catch (const std::exception& e) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to sync clipboard from server");
+        }
+    });
 }
 

@@ -140,6 +140,14 @@ public:
                            QString arguments,
                            int timeoutMs,
                            NvLogLevel logLevel = NvLogLevel::NVLL_VERBOSE);
+    
+    QString
+    openConnectionToString(QUrl baseUrl,
+                           QString command,
+                           QString arguments,
+                           const QByteArray& requestBody,
+                           int timeoutMs,
+                           NvLogLevel logLevel = NvLogLevel::NVLL_VERBOSE);
 
     void setServerCert(QSslCertificate serverCert);
 
@@ -178,6 +186,12 @@ public:
     QImage
     getBoxArt(int appId);
 
+    QString
+    getClipboard();
+
+    void
+    setClipboard(const QString& text);
+
     static
     QVector<NvDisplayMode>
     getDisplayModeList(QString serverInfo);
@@ -192,6 +206,14 @@ private:
     openConnection(QUrl baseUrl,
                    QString command,
                    QString arguments,
+                   int timeoutMs,
+                   NvLogLevel logLevel);
+    
+    QNetworkReply*
+    openConnection(QUrl baseUrl,
+                   QString command,
+                   QString arguments,
+                   const QByteArray& requestBody,
                    int timeoutMs,
                    NvLogLevel logLevel);
 

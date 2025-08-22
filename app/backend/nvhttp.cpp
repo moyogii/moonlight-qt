@@ -1,5 +1,6 @@
 #include "nvcomputer.h"
 #include <Limelight.h>
+#include <SDL.h>
 
 #include <QDebug>
 #include <QUuid>
@@ -461,6 +462,31 @@ NvHTTP::openConnectionToString(QUrl baseUrl,
     return ret;
 }
 
+QString
+NvHTTP::openConnectionToString(QUrl baseUrl,
+                               QString command,
+                               QString arguments,
+                               const QByteArray& requestBody,
+                               int timeoutMs,
+                               NvLogLevel logLevel)
+{
+    QNetworkReply* reply = openConnection(baseUrl, command, arguments, requestBody, timeoutMs, logLevel);
+    QString ret;
+
+    QTextStream stream(reply);
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    stream.setEncoding(QStringConverter::Utf8);
+#else
+    stream.setCodec("UTF-8");
+#endif
+
+    ret = stream.readAll();
+    delete reply;
+
+    return ret;
+}
+
 QNetworkReply*
 NvHTTP::openConnection(QUrl baseUrl,
                        QString command,
@@ -554,4 +580,126 @@ NvHTTP::openConnection(QUrl baseUrl,
     }
 
     return reply;
+}
+
+QNetworkReply*
+NvHTTP::openConnection(QUrl baseUrl,
+                       QString command,
+                       QString arguments,
+                       const QByteArray& requestBody,
+                       int timeoutMs,
+                       NvLogLevel logLevel)
+{
+    // Port must be set
+    Q_ASSERT(baseUrl.port(0) != 0);
+
+    // Build a URL for the request
+    QUrl url(baseUrl);
+    url.setPath("/" + command);
+
+    // Use a common UID for Moonlight clients to allow them to quit
+    // games for each other (otherwise GFE gets screwed up and it requires
+    // manual intervention to solve).
+    url.setQuery("uniqueid=0123456789ABCDEF&uuid=" +
+                 QUuid::createUuid().toRfc4122().toHex() +
+                 ((arguments != nullptr) ? ("&" + arguments) : ""));
+
+    QNetworkRequest request(url);
+
+    // Add our client certificate
+    request.setSslConfiguration(IdentityManager::get()->getSslConfig());
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    // Disable HTTP/2 (GFE 3.22 doesn't like it) and Qt 6 enables it by default
+    request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+#endif
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0) && QT_VERSION < QT_VERSION_CHECK(5, 15, 1) && !defined(QT_NO_BEARERMANAGEMENT)
+    // HACK: Set network accessibility to work around QTBUG-80947 (introduced in Qt 5.14.0 and fixed in Qt 5.15.1)
+    QT_WARNING_PUSH
+    QT_WARNING_DISABLE_DEPRECATED
+    m_Nam.setNetworkAccessible(QNetworkAccessManager::Accessible);
+    QT_WARNING_POP
+#endif
+
+    // Set content type for POST request
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "text/plain;charset=UTF-8");
+
+    QNetworkReply* reply = m_Nam.post(request, requestBody);
+
+    // Run the request with a timeout if requested
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, &loop, &QEventLoop::quit);
+    if (timeoutMs) {
+        QTimer::singleShot(timeoutMs, &loop, &QEventLoop::quit);
+    }
+    if (logLevel >= NvLogLevel::NVLL_VERBOSE) {
+        qInfo() << "Executing POST request:" << url.toString();
+    }
+    loop.exec(QEventLoop::ExcludeUserInputEvents);
+
+    // Abort the request if it timed out
+    if (!reply->isFinished())
+    {
+        if (logLevel >= NvLogLevel::NVLL_ERROR) {
+            qWarning() << "Aborting timed out request for" << url.toString();
+        }
+        reply->abort();
+    }
+
+    // We must clear out cached authentication and connections or
+    // GFE will puke next time
+    m_Nam.clearAccessCache();
+
+    // Handle error
+    if (reply->error() != QNetworkReply::NoError)
+    {
+        if (logLevel >= NvLogLevel::NVLL_ERROR) {
+            qWarning() << command << "request failed with error:" << reply->error();
+        }
+
+        if (reply->error() == QNetworkReply::SslHandshakeFailedError) {
+            // This will trigger falling back to HTTP for the serverinfo query
+            // then pairing again to get the updated certificate.
+            GfeHttpResponseException exception(401, "Server certificate mismatch");
+            delete reply;
+            throw exception;
+        }
+        else if (reply->error() == QNetworkReply::OperationCanceledError) {
+            QtNetworkReplyException exception(QNetworkReply::TimeoutError, "Request timed out");
+            delete reply;
+            throw exception;
+        }
+        else {
+            QtNetworkReplyException exception(reply->error(), reply->errorString());
+            delete reply;
+            throw exception;
+        }
+    }
+
+    return reply;
+}
+
+QString
+NvHTTP::getClipboard()
+{
+    QString response = openConnectionToString(m_BaseUrlHttps,
+                                            "actions/clipboard",
+                                            "type=text",
+                                            REQUEST_TIMEOUT_MS);
+    return response;
+}
+
+// Apollo only supports plain-text
+void
+NvHTTP::setClipboard(const QString& text)
+{
+    QByteArray postData = text.toUtf8();
+    QString response = openConnectionToString(m_BaseUrlHttps,
+                                            "actions/clipboard",
+                                            "type=text",
+                                            postData,
+                                            REQUEST_TIMEOUT_MS);
+    verifyResponseStatus(response);
 }

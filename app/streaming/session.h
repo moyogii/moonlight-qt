@@ -126,6 +126,9 @@ public:
 
     void setShouldExitAfterQuit();
 
+    void syncClipboardToServer();
+    void syncClipboardFromServer();
+
 signals:
     void stageStarting(QString stage);
 
@@ -284,6 +287,9 @@ private:
     Uint32 m_DropAudioEndTime;
 
     Overlay::OverlayManager m_OverlayManager;
+
+    QString m_LastClipboardText;
+    QString m_ClipboardIdentifier;
 
     static CONNECTION_LISTENER_CALLBACKS k_ConnCallbacks;
     static Session* s_ActiveSession;
