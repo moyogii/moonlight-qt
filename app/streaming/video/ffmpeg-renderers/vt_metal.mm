@@ -202,7 +202,6 @@ public:
 
         if (m_CommandQueue != nullptr) {
             // Ensure all pending Metal operations complete before cleanup
-            [m_CommandQueue finish];
             [m_CommandQueue release];
         }
 
