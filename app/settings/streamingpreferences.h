@@ -248,7 +248,6 @@ private:
     explicit StreamingPreferences(QQmlEngine *qmlEngine);
 
     QString getSuffixFromLanguage(Language lang);
-    void checkAndRequestAwdlAuthorizationIfNeeded();
 
     QQmlEngine* m_QmlEngine;
     AwdlController* m_AwdlController;
