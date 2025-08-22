@@ -53,11 +53,11 @@
 
 // Log to file or console dynamically for Windows builds
 #define LOG_TO_FILE
-#elif !defined(QT_DEBUG) && defined(Q_OS_DARWIN)
-// Log to file for release Mac builds
+#elif defined(Q_OS_DARWIN)
+// Log to file for both debug and release Mac builds
 #define LOG_TO_FILE
 #else
-// Log to console for debug Mac builds
+// Log to console for other platforms
 #endif
 
 static QElapsedTimer s_LoggerTime;

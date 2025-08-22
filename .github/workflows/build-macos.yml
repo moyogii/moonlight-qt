@@ -45,6 +45,7 @@ jobs:
         fi
         
         echo "" >> changelog.md
+        echo "" >> changelog.md
         echo "Download the ad-hoc signed DMG below." >> changelog.md
         
         if [ -n "$LAST_TAG" ]; then
