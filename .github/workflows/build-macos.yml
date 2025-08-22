@@ -45,7 +45,7 @@ jobs:
         fi
         
         echo "" >> changelog.md
-        echo "Download the ad-hoc DMG from the assets below." >> changelog.md
+        echo "Download the ad-hoc signed DMG below." >> changelog.md
         
         if [ -n "$LAST_TAG" ]; then
           echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${FULL_VERSION}" >> changelog.md
