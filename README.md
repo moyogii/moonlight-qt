@@ -16,7 +16,7 @@ You can follow development on our [Discord server](https://moonlight-stream.org/
  [![Translation Status](https://hosted.weblate.org/widgets/moonlight/-/moonlight-qt/svg-badge.svg)](https://hosted.weblate.org/projects/moonlight/moonlight-qt/)
 
 ## Features
- - Hardware accelerated video decoding on Windows, Mac, and Linux
+ - Hardware accelerated video decoding on Mac
  - H.264, HEVC, and AV1 codec support (AV1 requires Sunshine and a supported host GPU)
  - YUV 4:4:4 support (Sunshine only)
  - HDR streaming support
@@ -28,6 +28,7 @@ You can follow development on our [Discord server](https://moonlight-stream.org/
  - Automatic enabling and disabling of AWDL (Apple Wireless Direct Link)
  - Game Mode support
  - AV1 Hardware Decoding (Apple Silicon M3 and above)
+ - Clipboard Sync (Requires [Apollo](https://github.com/ClassicOldSong/Apollo))
  
 ## Downloads
 - [macOS](https://github.com/moyogii/moonlight-qt/releases)
